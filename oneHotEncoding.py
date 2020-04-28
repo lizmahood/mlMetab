@@ -13,14 +13,13 @@ def argparsr(argl):
             outp = argl[ar + 1]
         elif argl[ar] == '-perct':
             perc = argl[ar + 1]
-        else:
-            pass
+
     return(inpf, binw, outp, perc)
 
 def show_help():
     print('ARGS:\n'\
         '-inp full path to input file\n'\
-        '-outp full path to desired output file\n'\
+        '-output full path to desired output file\n'\
         '-perct what percentage (as decimal) do you want for the test set?\n'\
         '-binw what is your preferred binwidth?')
 
@@ -35,7 +34,7 @@ def parse_mgf(inp):
         if inpl.startswith('Name') and strt == True:
             nam = inpl[6:].strip()
             clas = nam.split()[0].replace('[','').replace(']','')
-            name = nam.replace(' ', '_').replace(':', '-').replace(';', '').replace('}','')
+            name = nam.replace(' ', '_').replace(':', '-').replace(';', '').replace('}','').replace(',','-')
             mgfd[clas] = []
             strt = False
         elif inpl.startswith('Name') and strt != True:
@@ -47,7 +46,7 @@ def parse_mgf(inp):
             ##resetting variables for next entry
             nam = inpl[6:].strip()
             clas = nam.split()[0].replace('[','').replace(']','')
-            name = nam.replace(' ', '_').replace(':', '-').replace(';','').replace('}','')
+            name = nam.replace(' ', '_').replace(':', '-').replace(';','').replace('}','').replace(',', '-')
         elif inpl.startswith('MW:'):
             mz = float(inpl.strip().split(': ')[1])
         elif inpl.startswith('Num Peaks:'):
@@ -95,9 +94,9 @@ def make_arff(bnw, mgfd, out, p):
     train.write('@attribute\tID\tstring\n')
     test.write('@attribute\tID\tstring\n')
     
-    for item in biglist:
-        train.write(f'@attribute\t{item}\tnumeric\n')
-        test.write(f'@attribute\t{item}\tnumeric\n')
+    for i in range(len(biglist)-1):
+        train.write(f'@attribute\t{biglist[i]}-{biglist[i+1]}\tnumeric\n')
+        test.write(f'@attribute\t{biglist[i]}-{biglist[i+1]}\tnumeric\n')
 
     ##adding line for all possible classes
     clssls = mgfd.keys()
@@ -137,15 +136,33 @@ def make_arff(bnw, mgfd, out, p):
         flatr[ind] = onehot(flatr[ind], biglist)
         featstr = ','.join(str(x) for x in flatr[ind][3])
         test.write(f'{flatr[ind][0]},{featstr},{flatr[ind][1]}\n')
+    test.close()
+    print('Done with test!')
 
     ##now training
     for ind in range(len(trainr)):
         trainr[ind] = onehot(trainr[ind], biglist)
         featstr = ','.join(str(x) for x in trainr[ind][3])
         train.write(f'{trainr[ind][0]},{featstr},{trainr[ind][1]}\n')
+    train.close()
+    print('Done with train!')
     
+def main():
+    if len(sys.argv) == 1 or '-h' in sys.argv:
+        show_help()
+        sys.exit()
+    
+    try:
+        infil, binw, outf, per = argparsr(sys.argv)
 
+    except: 
+        print('Error reading arguments! Quitting!')
+        show_help()
+        sys.exit()
 
-infil, binw, outf, per = argparsr(sys.argv)
-mgffd = parse_mgf(open(infil, 'r'))
-make_arff(binw, mgffd, outf, per)
+    mgffd = parse_mgf(open(infil, 'r'))
+    make_arff(binw, mgffd, outf, per)
+    print('All done! Goodbye!')
+
+if __name__ == '__main__':
+    main()
