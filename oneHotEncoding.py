@@ -55,7 +55,7 @@ def parse_mgf(inp, frm):
                     mgfd[clas].append([name, clas, mz, peaks])
             else:
                 if frm == 'y':
-                    mgfd[clas] = [[name, clas, mz, peaks]]
+                    mgfd[clas] = [[name, clas, mz, peaks, form]]
                 else:
                     mgfd[clas] = [[name, clas, mz, peaks]]
 
@@ -67,7 +67,7 @@ def parse_mgf(inp, frm):
         elif inpl.startswith('MW:'):
             mz = float(inpl.strip().split(': ')[1])
         elif inpl.startswith('Comment'):
-            form = inpl.strip().split(';')[-2].strip()
+            form = inpl.strip().split(';')[4].strip()
         elif inpl.startswith('Num Peaks:'):
             peaks = []
             inpl =inp.readline()
@@ -75,8 +75,10 @@ def parse_mgf(inp, frm):
                 ##we are just logging mz, not abund
                 peaks.append(float(inpl.strip().split()[0]))
                 inpl = inp.readline()
-
-    mgfd[clas].append([name, clas, mz, peaks])
+    if frm == 'y':
+        mgfd[clas].append([name, clas, mz, peaks, form])
+    else: 
+        mgfd[clas].append([name, clas, mz, peaks])
     return(mgfd)
 
 def onehot(lin, bigl):
@@ -157,16 +159,19 @@ def make_arff(bnw, mgfd, out, p, frm):
 
     ##doing one-hot now and writing out
     ##first for test arff instances
-    #for ind in range(len(flatr)):
-    for ind in range(3):
+    for ind in range(len(flatr)):
         flatr[ind] = onehot(flatr[ind], biglist)
         featstr = ','.join(str(x) for x in flatr[ind][3])
         if frm == 'y':
-            c, h, o, n, p, s, mim = fp.parse_form(flatr[ind][4])
+            #print(flatr[ind])
+            try:
+                c, h, o, n, p, s, mim = fp.parse_form(flatr[ind][4])
+            except IndexError:
+                print(flatr[ind])
             h2c, h2o, c2o, c2n, c2s, c2p = fp.get_allrat(c,h,o,n,p,s)
             mad, amd, rmd = fp.mass_defects(mim)
             ffeatstr = ','.join(str(x) for x in [mim, c, h, n, o, p, s, c2o, h2c,
-             h2o, c2p, c2n, c2s, amd, mad, rmd])
+                h2o, c2p, c2n, c2s, amd, mad, rmd])
             test.write(f'{flatr[ind][0]},{featstr},{ffeatstr},{flatr[ind][1]}\n')
         else:
             test.write(f'{flatr[ind][0]},{featstr},{flatr[ind][1]}\n')
@@ -174,16 +179,18 @@ def make_arff(bnw, mgfd, out, p, frm):
     print('Done with test!')
 
     ##now training
-    #for ind in range(len(trainr)):
-    for ind in range(3):
+    for ind in range(len(trainr)):
         trainr[ind] = onehot(trainr[ind], biglist)
         featstr = ','.join(str(x) for x in trainr[ind][3])
         if frm == 'y':
-            c, h, o, n, p, s, mim = fp.parse_form(trainr[ind][4])
+            try:
+                c, h, o, n, p, s, mim = fp.parse_form(trainr[ind][4])
+            except IndexError:
+                print(trainr[ind])
             h2c, h2o, c2o, c2n, c2s, c2p = fp.get_allrat(c,h,o,n,p,s)
             mad, amd, rmd = fp.mass_defects(mim)
             ffeatstr = ','.join(str(x) for x in [mim, c, h, n, o, p, s, c2o, h2c,
-             h2o, c2p, c2n, c2s, amd, mad, rmd])
+            h2o, c2p, c2n, c2s, amd, mad, rmd])
             train.write(f'{trainr[ind][0]},{featstr},{ffeatstr},{trainr[ind][1]}\n')
         else: 
             train.write(f'{trainr[ind][0]},{featstr},{trainr[ind][1]}\n')
@@ -238,16 +245,18 @@ def make_irf(bnw, mgfd, out, p, frm):
     trainr = [item for sublist in trlst for item in sublist]
     print('Done with making lists!')
 
-    #for ind in range(len(flatr)):
-    for ind in range(3):
+    for ind in range(len(flatr)):
         flatr[ind] = onehot(flatr[ind], biglist)
         featstr = '\t'.join(str(x) for x in flatr[ind][3])
         if frm == 'y':
-            c, h, o, n, p, s, mim = fp.parse_form(flatr[ind][4])
+            try:
+                c, h, o, n, p, s, mim = fp.parse_form(flatr[ind][4])
+            except IndexError:
+                print(flatr[ind])
             h2c, h2o, c2o, c2n, c2s, c2p = fp.get_allrat(c,h,o,n,p,s)
             mad, amd, rmd = fp.mass_defects(mim)
             ffeatstr = '\t'.join(str(x) for x in [mim, c, h, n, o, p, s, c2o, h2c,
-             h2o, c2p, c2n, c2s, amd, mad, rmd])
+            h2o, c2p, c2n, c2s, amd, mad, rmd])
             testx.write(f'{featstr}\t{ffeatstr}\n')
         else: 
             testx.write(f'{featstr}\n')
@@ -256,16 +265,17 @@ def make_irf(bnw, mgfd, out, p, frm):
     testy.close()
     print('Done with test!')
 
-    #for ind in range(len(trainr)):
-    for ind in range(3):
-        trainr[ind] = onehot(flatr[ind], biglist)
-        featstr = '\t'.join(str(x) for x in flatr[ind][3])
+    for ind in range(len(trainr)):
+        trainr[ind] = onehot(trainr[ind], biglist)
+        featstr = '\t'.join(str(x) for x in trainr[ind][3])
         if frm == 'y':
-            c, h, o, n, p, s, mim = fp.parse_form(flatr[ind][4])
+            try:
+                c, h, o, n, p, s, mim = fp.parse_form(trainr[ind][4])
+            except IndexError:
+                print(trainr[ind])
             h2c, h2o, c2o, c2n, c2s, c2p = fp.get_allrat(c,h,o,n,p,s)
             mad, amd, rmd = fp.mass_defects(mim)
-            ffeatstr = '\t'.join(str(x) for x in [mim, c, h, n, o, p, s, c2o, h2c,
-             h2o, c2p, c2n, c2s, amd, mad, rmd])
+            ffeatstr = '\t'.join(str(x) for x in [mim, c, h, n, o, p, s, c2o, h2c,h2o, c2p, c2n, c2s, amd, mad, rmd])
             trainx.write(f'{featstr}\t{ffeatstr}\n')
         else:
             trainx.write(f'{featstr}\n')
