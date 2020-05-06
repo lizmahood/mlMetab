@@ -19,7 +19,11 @@ def argparsr(argl):
             maka = argl[ar + 1]
         elif argl[ar] == '-forms':
             frm = argl[ar + 1]
-    return(inpf, binw, outp, perc, makr, maka, frm)
+        elif argl[ar] == '-chal':
+            chal = argl[ar + 1]
+        elif argl[ar] == '-classes':
+            classes = argl[ar + 1]
+    return(inpf, binw, outp, perc, makr, maka, frm, chal, classes)
 
 def show_help():
     print('ARGS:\n'\
@@ -28,7 +32,10 @@ def show_help():
         '-perct what percentage (as decimal) do you want for the test set?\n'\
         '-makeR do you want to make iRF input? y OR n\n'\
         '-makeA do you want to make WEKA input? y OR n\n'\
+        '-classes FOR CHALLENGE, what classes were made in the training arff?\n'\
+            'Leave blank if you don\'t want a challenge arff\n'\
         '-forms do you want to include formula features as well?\n'\
+        '-chal do you want to make a challenge arff? n OR path to input\n'\
         '-binw what is your preferred binwidth?')
 
 def parse_mgf(inp, frm):
@@ -98,41 +105,18 @@ def onehot(lin, bigl):
     lin[3] = ohpeaks
     return lin
 
-def make_arff(bnw, mgfd, out, p, frm):
+def make_outs(bnw, mgfd, out, p, frm, a, r):
     ##mgfd is the dict containing output of parse_mgf
-    ##binwidth is float or int
-    ##OUTPUTS: arff file with peaks as
+    ##bnw is float or int
+    ##out is output file name header, string
+    ##p is a float, percent of file to reserve for test
+    ## frm is y or n, strings
+    ## a is y or n, strings
+    ## r is y or n, strings
+    ##OUTPUTS: arff and / or irf files with peaks as
     ##one-hot encoded features
 
-    #Initialize ARFF file
-    train=open(out + 'training.arff','w')
-    test=open(out + 'test.arff','w')
-
     biglist=np.arange(50,2500,float(bnw))
-    train.write('@relation\tMSMS_multiclass\n\n')
-    test.write('@relation\tMSMS_multiclass\n\n')
-
-    train.write('@attribute\tID\tstring\n')
-    test.write('@attribute\tID\tstring\n')
-    
-    for i in range(len(biglist)-1):
-        train.write(f'@attribute\t{biglist[i]}-{biglist[i+1]}\tnumeric\n')
-        test.write(f'@attribute\t{biglist[i]}-{biglist[i+1]}\tnumeric\n')
-
-    if frm == 'y':
-        frmft = fp.make_arff_header()
-        test.write(f'{frmft}')
-        train.write(f'{frmft}')
-
-    ##adding line for all possible classes
-    clssls = mgfd.keys()
-
-    clsstr = ','.join(clssls)
-    print(clsstr)
-    train.write(f'@attribute\tclass\t{{{clsstr}}}\n\n')
-    test.write(f'@attribute\tclass\t{{{clsstr}}}\n\n')
-    train.write('@data\n')
-    test.write('@data\n')
 
     ##reserving instances for the test arff
     rlst = []
@@ -157,11 +141,61 @@ def make_arff(bnw, mgfd, out, p, frm):
     trainr = [item for sublist in trlst for item in sublist]
     print('done with making lists!')
 
+    if a == 'y':
+        #Initialize ARFF file
+        train=open(out + 'training.arff','w')
+        test=open(out + 'test.arff','w')
+
+        train.write('@relation\tMSMS_multiclass\n\n')
+        test.write('@relation\tMSMS_multiclass\n\n')
+
+        train.write('@attribute\tID\tstring\n')
+        test.write('@attribute\tID\tstring\n')
+    
+        for i in range(len(biglist)-1):
+            train.write(f'@attribute\t{biglist[i]}-{biglist[i+1]}\tnumeric\n')
+            test.write(f'@attribute\t{biglist[i]}-{biglist[i+1]}\tnumeric\n')
+
+        if frm == 'y':
+            frmft = fp.make_arff_header()
+            test.write(f'{frmft}')
+            train.write(f'{frmft}')
+
+        ##adding line for all possible classes
+        clssls = mgfd.keys()
+
+        clsstr = ','.join(clssls)
+        print(clsstr)
+        train.write(f'@attribute\tclass\t{{{clsstr}}}\n\n')
+        test.write(f'@attribute\tclass\t{{{clsstr}}}\n\n')
+        train.write('@data\n')
+        test.write('@data\n')
+
+    if r == 'y':
+        trainx = open(out + 'xtrain.tab', 'w')
+        testx = open(out + 'xtest.tab', 'w')
+        trainy = open(out + 'ytrain.tab', 'w')
+        testy = open(out + 'ytest.tab', 'w')
+
+        ##writing out feature names for x-files
+        news = ''
+        for i in range(len(biglist)-1):
+            news += f'{biglist[i]}-{biglist[i+1]}\t'
+    
+        if frm == 'y':
+            news += fp.make_irf_header()
+
+        trainx.write(f'{news}\n')
+        testx.write(f'{news}\n')
+
     ##doing one-hot now and writing out
     ##first for test arff instances
     for ind in range(len(flatr)):
         flatr[ind] = onehot(flatr[ind], biglist)
-        featstr = ','.join(str(x) for x in flatr[ind][3])
+        if a == 'y':
+            featstra = ','.join(str(x) for x in flatr[ind][3])
+        if r == 'y':
+            featstrr = '\t'.join(str(x) for x in flatr[ind][3])
         if frm == 'y':
             #print(flatr[ind])
             try:
@@ -170,18 +204,35 @@ def make_arff(bnw, mgfd, out, p, frm):
                 print(flatr[ind])
             h2c, h2o, c2o, c2n, c2s, c2p = fp.get_allrat(c,h,o,n,p,s)
             mad, amd, rmd = fp.mass_defects(mim)
-            ffeatstr = ','.join(str(x) for x in [mim, c, h, n, o, p, s, c2o, h2c,
+            if a == 'y':
+                ffeatstra = ','.join(str(x) for x in [mim, c, h, n, o, p, s, c2o, h2c,
                 h2o, c2p, c2n, c2s, amd, mad, rmd])
-            test.write(f'{flatr[ind][0]},{featstr},{ffeatstr},{flatr[ind][1]}\n')
+                test.write(f'{flatr[ind][0]},{featstra},{ffeatstra},{flatr[ind][1]}\n')
+            if r == 'y':
+                ffeatstrr = '\t'.join(str(x) for x in [mim, c, h, n, o, p, s, c2o, h2c,
+                h2o, c2p, c2n, c2s, amd, mad, rmd])
+                testx.write(f'{featstrr}\t{ffeatstrr}\n')
         else:
-            test.write(f'{flatr[ind][0]},{featstr},{flatr[ind][1]}\n')
-    test.close()
-    print('Done with test!')
+            if a == 'y':
+                test.write(f'{flatr[ind][0]},{featstra},{flatr[ind][1]}\n')
+            if r == 'y':
+                testx.write(f'{featstrr}\n')
+        if r == 'y':
+            testy.write(f'{flatr[ind][1]}\n')
+    if a == 'y':
+        test.close()
+    if r == 'y':
+        testx.close()
+        testy.close()
+    print('Done with test(s)!')
 
     ##now training
     for ind in range(len(trainr)):
         trainr[ind] = onehot(trainr[ind], biglist)
-        featstr = ','.join(str(x) for x in trainr[ind][3])
+        if a == 'y':
+            featstra = ','.join(str(x) for x in trainr[ind][3])
+        if r == 'y':
+            featstrr = '\t'.join(str(x) for x in trainr[ind][3]) 
         if frm == 'y':
             try:
                 c, h, o, n, p, s, mim = fp.parse_form(trainr[ind][4])
@@ -189,100 +240,125 @@ def make_arff(bnw, mgfd, out, p, frm):
                 print(trainr[ind])
             h2c, h2o, c2o, c2n, c2s, c2p = fp.get_allrat(c,h,o,n,p,s)
             mad, amd, rmd = fp.mass_defects(mim)
-            ffeatstr = ','.join(str(x) for x in [mim, c, h, n, o, p, s, c2o, h2c,
-            h2o, c2p, c2n, c2s, amd, mad, rmd])
-            train.write(f'{trainr[ind][0]},{featstr},{ffeatstr},{trainr[ind][1]}\n')
+            if a == 'y':
+                ffeatstra = ','.join(str(x) for x in [mim, c, h, n, o, p, s, c2o, h2c,
+                h2o, c2p, c2n, c2s, amd, mad, rmd])
+                train.write(f'{trainr[ind][0]},{featstra},{ffeatstra},{trainr[ind][1]}\n')
+            if r == 'y':
+                ffeatstrr = '\t'.join(str(x) for x in [mim, c, h, n, o, p, s, c2o, h2c,
+                h2o, c2p, c2n, c2s, amd, mad, rmd])
+                trainx.write(f'{featstrr}\t{ffeatstrr}\n')
         else: 
-            train.write(f'{trainr[ind][0]},{featstr},{trainr[ind][1]}\n')
-    train.close()
-    print('Done with train!')
+            if a == 'y':
+                train.write(f'{trainr[ind][0]},{featstra},{trainr[ind][1]}\n')
+            if r == 'y':
+                trainx.write(f'{featstrr}\n')
+        if r == 'y':
+            trainy.write(f'{trainr[ind][1]}\n')
+    if a == 'y':
+        train.close()
+    if r == 'y':
+        trainx.close()
+        trainy.close()
+    print('Done with train(s)!')
 
-def make_irf(bnw, mgfd, out, p, frm):
-    ##mgfd is the dict containing output of parse_mgf
-    ##binwidth is float or int
-    ##OUTPUTS: x: one hot features for each instance, 
-    # y: class of each instance, xtest: features for
-    # each test instance, ytest: class of each test ins
+def make_challenge_arff(inp, frm, out, binw, clss):
+    ##inp is the path to the mgf file
+    ##Frm is a string (y OR n)
+    ##out is path to output name
+    ##binw is int or float
+    ##clss is large string of all classes used in training arff
+    inp = open(inp, 'r', encoding = 'utf-8')
+    chal = open(out + '_challenge.arff', 'w')
+    biglist=np.arange(50,2500,float(binw))
 
-    trainx = open(out + 'xtrain.tab', 'w')
-    testx = open(out + 'xtest.tab', 'w')
-    trainy = open(out + 'ytrain.tab', 'w')
-    testy = open(out + 'ytest.tab', 'w')
+    #Initialize ARFF file
+    chal.write('@relation\tMSMS_multiclass\n\n')
+    chal.write('@attribute\tID\tstring\n')
 
-    biglist=np.arange(50,2500,float(bnw))
-
-    ##writing out feature names for x-files
-    news = ''
-    for i in range(len(biglist)-1):
-        news += f'{biglist[i]}-{biglist[i+1]}\t'
     
+    for i in range(len(biglist)-1):
+        chal.write(f'@attribute\t{biglist[i]}-{biglist[i+1]}\tnumeric\n')
+
     if frm == 'y':
-        news += fp.make_irf_header()
+        frmft = fp.make_arff_header()
+        chal.write(f'{frmft}')
 
-    trainx.write(f'{news}\n')
-    testx.write(f'{news}\n')
+    ##adding line for all possible classes -- in training arff
+    chal.write(f'@attribute\tclass\t{{{clss}}}\n\n')
+    chal.write('@data\n')
 
-    ##reserving instances for the test arff
-    rlst = []
-    trlst = []
-    for insl in mgfd.values():
-        if len(insl) >= 10:
-            sampnum = int(float(p) * len(insl))
-        else:
-            sampnum = 1
-        tmp = random.sample(insl, sampnum)
+    ##looping through challenge msp
+    strt = True
+    inpl = inp.readline()
+    while inpl:
+        olst = []
+        if inpl.startswith('Name') and strt == True:
+            nam = inpl[6:].strip()
+            name = nam.replace(' ', '_').replace(':', '-').replace(';', '').replace('}','')\
+                .replace(',','-').replace('γ', 'Gam').replace('⁴-⁷','').replace('"', '')\
+                    .replace('⁴-⁹','').replace('(−)','').replace('²-⁷','')\
+                        .replace('³-⁵','').replace('′','').replace('\'','').replace('{','')
+            clas = '?'
+            strt = False
 
-        ##now getting remainder
-        remainder = insl
-        for x in tmp:
-            remainder.remove(x)
+        elif inpl.startswith('Name') and strt != True:
+            if frm == 'y':
+                olst = [name, clas, mz, peaks, form]
+            else:
+                olst = [name, clas, mz, peaks]
 
-        ##getting instances not in tmp (these are the training ones)
-        rlst.append(tmp)
-        trlst.append(remainder)
-        
-    flatr = [item for sublist in rlst for item in sublist]
-    trainr = [item for sublist in trlst for item in sublist]
-    print('Done with making lists!')
+            nlst = onehot(olst, biglist)
+            featstra = ','.join(str(x) for x in nlst[3])
+            if frm == 'y':
+                c, h, o, n, p, s, mim = fp.parse_form(nlst[4])
+                h2c, h2o, c2o, c2n, c2s, c2p = fp.get_allrat(c,h,o,n,p,s)
+                mad, amd, rmd = fp.mass_defects(mim)
+                ffeatstra = ','.join(str(x) for x in [mim, c, h, n, o, p, s, c2o, h2c,
+                h2o, c2p, c2n, c2s, amd, mad, rmd])
+                try:
+                    chal.write(f'{nlst[0]},{featstra},{ffeatstra},{nlst[1]}\n')  
+                except:
+                    print("{nlst[0]},{featstra},{ffeatstra},{nlst[1]}: ", {nlst[0]},{featstra},{ffeatstra},{nlst[1]})
+          
+            else:
+                chal.write(f'{nlst[0]},{featstra},{nlst[1]}\n')
 
-    for ind in range(len(flatr)):
-        flatr[ind] = onehot(flatr[ind], biglist)
-        featstr = '\t'.join(str(x) for x in flatr[ind][3])
-        if frm == 'y':
-            try:
-                c, h, o, n, p, s, mim = fp.parse_form(flatr[ind][4])
-            except IndexError:
-                print(flatr[ind])
-            h2c, h2o, c2o, c2n, c2s, c2p = fp.get_allrat(c,h,o,n,p,s)
-            mad, amd, rmd = fp.mass_defects(mim)
-            ffeatstr = '\t'.join(str(x) for x in [mim, c, h, n, o, p, s, c2o, h2c,
-            h2o, c2p, c2n, c2s, amd, mad, rmd])
-            testx.write(f'{featstr}\t{ffeatstr}\n')
-        else: 
-            testx.write(f'{featstr}\n')
-        testy.write(f'{flatr[ind][1]}\n')
-    testx.close()
-    testy.close()
-    print('Done with test!')
+            ##resetting variables for next entry
+            nam = inpl[6:].strip()
+            clas = '?'
+            name = nam.replace(' ', '_').replace(':', '-').replace(';', '').replace('}','')\
+                .replace(',','-').replace('γ', 'Gam').replace('⁴-⁷','').replace('"', '')\
+                    .replace('⁴-⁹','').replace('(−)','').replace('²-⁷','')\
+                        .replace('³-⁵','').replace('′','').replace('\'','').replace('{','')
+        elif inpl.startswith('PrecursorMZ:'):
+            mz = float(inpl.strip().split(': ')[1])
+        elif inpl.startswith('Formula'):
+            form = inpl.strip().split(': ')[1]
+        elif inpl.startswith('Num Peaks:'):
+            peaks = []
+            inpl =inp.readline()
+            while inpl[:1].isdigit():
+                ##we are just logging mz, not abund
+                peaks.append(float(inpl.strip().split()[0]))
+                inpl = inp.readline()
+        inpl = inp.readline()
+    if frm == 'y':
+        olst = [name, clas, mz, peaks, form]
+    else:
+        olst = [name, clas, mz, peaks]
 
-    for ind in range(len(trainr)):
-        trainr[ind] = onehot(trainr[ind], biglist)
-        featstr = '\t'.join(str(x) for x in trainr[ind][3])
-        if frm == 'y':
-            try:
-                c, h, o, n, p, s, mim = fp.parse_form(trainr[ind][4])
-            except IndexError:
-                print(trainr[ind])
-            h2c, h2o, c2o, c2n, c2s, c2p = fp.get_allrat(c,h,o,n,p,s)
-            mad, amd, rmd = fp.mass_defects(mim)
-            ffeatstr = '\t'.join(str(x) for x in [mim, c, h, n, o, p, s, c2o, h2c,h2o, c2p, c2n, c2s, amd, mad, rmd])
-            trainx.write(f'{featstr}\t{ffeatstr}\n')
-        else:
-            trainx.write(f'{featstr}\n')
-        trainy.write(f'{trainr[ind][1]}\n')
-    trainx.close()
-    trainy.close()
-    print('Done with train!')
+    nlst = onehot(olst, biglist)
+    featstra = ','.join(str(x) for x in nlst[3])
+    if frm == 'y':
+        c, h, o, n, p, s, mim = fp.parse_form(nlst[4])
+        h2c, h2o, c2o, c2n, c2s, c2p = fp.get_allrat(c,h,o,n,p,s)
+        mad, amd, rmd = fp.mass_defects(mim)
+        ffeatstra = ','.join(str(x) for x in [mim, c, h, n, o, p, s, c2o, h2c,
+        h2o, c2p, c2n, c2s, amd, mad, rmd])
+        chal.write(f'{nlst[0]},{featstra},{ffeatstra},{nlst[1]}\n')            
+    else:
+        chal.write(f'{nlst[0]},{featstra},{nlst[1]}\n')
 
 def main():
     if len(sys.argv) == 1 or '-h' in sys.argv:
@@ -290,19 +366,19 @@ def main():
         sys.exit()
     
     try:
-        infil, binw, outf, per, r, a, fr = argparsr(sys.argv)
+        infil, binw, outf, per, r, a, fr, chal, classes = argparsr(sys.argv)
 
     except: 
         print('Error reading arguments! Quitting!')
         show_help()
         sys.exit()
 
-    mgffd = parse_mgf(open(infil, 'r'), fr)
-
-    if a == 'y':
-        make_arff(binw, mgffd, outf, per, fr)
-    if r == 'y':
-        make_irf(binw, mgffd, outf, per, fr)
+    if r != 'n' and a != 'n':
+        mgffd = parse_mgf(open(infil, 'r'), fr)
+        make_outs(binw, mgffd, outf, per, fr, a, r)
+    
+    if chal != 'n':
+        make_challenge_arff(chal, fr, outf, binw, classes)
 
     print('All done! Goodbye!')
 
