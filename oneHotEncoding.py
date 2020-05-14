@@ -293,7 +293,7 @@ def make_challenge_arff(inp, frm, out, binw, clss):
     inpl = inp.readline()
     while inpl:
         olst = []
-        if inpl.startswith('Name') and strt == True:
+        if (inpl.startswith('Name') and strt == True) or (inpl.startswith('SCAN') and strt == True):
             nam = inpl[6:].strip()
             name = nam.replace(' ', '_').replace(':', '-').replace(';', '').replace('}','')\
                 .replace(',','-').replace('γ', 'Gam').replace('⁴-⁷','').replace('"', '')\
@@ -301,8 +301,10 @@ def make_challenge_arff(inp, frm, out, binw, clss):
                         .replace('³-⁵','').replace('′','').replace('\'','').replace('{','')
             clas = '?'
             strt = False
+            if inpl.startswith('SCAN'):
+                form = inpl.strip().split('|')[2]
 
-        elif inpl.startswith('Name') and strt != True:
+        elif (inpl.startswith('Name') and strt != True) or (inpl.startswith('SCAN') and strt != True):
             if frm == 'y':
                 olst = [name, clas, mz, peaks, form]
             else:
@@ -317,9 +319,11 @@ def make_challenge_arff(inp, frm, out, binw, clss):
                 ffeatstra = ','.join(str(x) for x in [mim, c, h, n, o, p, s, c2o, h2c,
                 h2o, c2p, c2n, c2s, amd, mad, rmd])
                 try:
-                    chal.write(f'{nlst[0]},{featstra},{ffeatstra},{nlst[1]}\n')  
+                    chal.write(f'{nn},{featstra},{ffeatstra},{nlst[1]}\n')  
                 except:
-                    print("{nlst[0]},{featstra},{ffeatstra},{nlst[1]}: ", {nlst[0]},{featstra},{ffeatstra},{nlst[1]})
+                    encc = nlst[0].encode('ASCII', 'ignore')
+                    encd = encc.decode()
+                    chal.write(f'{encd},{featstra},{ffeatstra},{nlst[1]}\n')
           
             else:
                 chal.write(f'{nlst[0]},{featstra},{nlst[1]}\n')
@@ -331,8 +335,12 @@ def make_challenge_arff(inp, frm, out, binw, clss):
                 .replace(',','-').replace('γ', 'Gam').replace('⁴-⁷','').replace('"', '')\
                     .replace('⁴-⁹','').replace('(−)','').replace('²-⁷','')\
                         .replace('³-⁵','').replace('′','').replace('\'','').replace('{','')
+            if inpl.startswith('SCAN'):
+                form = inpl.strip().split('|')[2]
         elif inpl.startswith('PrecursorMZ:'):
             mz = float(inpl.strip().split(': ')[1])
+        elif inpl.startswith('PEPMASS'):
+            mz = float(inpl.strip().split('=')[1])
         elif inpl.startswith('Formula'):
             form = inpl.strip().split(': ')[1]
         elif inpl.startswith('Num Peaks:'):
@@ -340,6 +348,12 @@ def make_challenge_arff(inp, frm, out, binw, clss):
             inpl =inp.readline()
             while inpl[:1].isdigit():
                 ##we are just logging mz, not abund
+                peaks.append(float(inpl.strip().split()[0]))
+                inpl = inp.readline()
+        elif inpl.startswith('ION='):
+            peaks = []
+            inpl = inp.readline()
+            while inpl[1].isdigit():
                 peaks.append(float(inpl.strip().split()[0]))
                 inpl = inp.readline()
         inpl = inp.readline()
